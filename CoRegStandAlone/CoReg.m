@@ -7,9 +7,9 @@ fileID = fopen(loadFile, 'rt');
 str = fread(fileID, Inf, '*uchar');
 fclose(fileID);
 str = char(str(:)');
-expression = '(?<field>MRS_struct.version.coreg = )''(?<version>.*?)''';
+expression = '(?<field>MRS_struct.info.version.coreg = )''(?<version>.*?)''';
 out = regexp(str, expression, 'names');
-MRS_struct.version.coreg = out.version;
+MRS_struct.info.version.coreg = out.version;
 
 warning('off'); % temporarily suppress warning messages
 
@@ -112,6 +112,9 @@ for ii = 1:numscans
         else
             h = figure(103);
         end
+        if ~isMATLABReleaseOlderThan("R2025a")
+            h.Theme = 'light';
+        end
         scr_sz = get(0,'ScreenSize');
         fig_w = 1000;
         fig_h = 707;
@@ -125,7 +128,7 @@ for ii = 1:numscans
         set(ha, 'Position', [0 pos(2) 1 pos(4)]);
         axis off;
         
-        [~,tmp,tmp2] = fileparts(MRS_struct.mask.(vox{kk}).outfile{ii});
+        [~,tmp,tmp2] = fileparts(MRS_struct.mask.(vox{kk}).fname{ii});
         fname = [tmp tmp2];
         if length(fname) > 30
             fname = [fname(1:12) '...' fname(end-11:end)];
@@ -134,7 +137,7 @@ for ii = 1:numscans
         text(0.5, 0.75, [' ' fname], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13, 'Interpreter', 'none');
         
         text(0.5, 0.63, 'Spatial parameters: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.63, ' [LR, AP, FH]', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        text(0.5, 0.63, ' [LR, PA, SI]', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
         
         tmp = [' ' num2str(MRS_struct.p.voxdim(ii,1)) ' \times ' num2str(MRS_struct.p.voxdim(ii,2)) ' \times ' num2str(MRS_struct.p.voxdim(ii,3)) ' mm^{3}'];
         text(0.5, 0.51, 'Dimensions: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
@@ -157,7 +160,7 @@ for ii = 1:numscans
         text(0.5, 0.15, tmp, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
         
         text(0.5, 0.03, 'CoRegVer: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.03, [' ' MRS_struct.version.coreg], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        text(0.5, 0.03, [' ' MRS_struct.info.version.coreg], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
         
         hb = subplot(2,3,1:3);
         
@@ -182,8 +185,12 @@ for ii = 1:numscans
         img = MRS_struct.mask.(vox{kk}).img{ii}(:);
         caxis([0 mean(img(img > 0.01)) + 3*std(img(img > 0.01))]); %#ok<*CAXIS> 
         axis equal tight off;
-        text(10, size(MRS_struct.mask.(vox{kk}).img{ii},1)/2, 'L', 'Color', [1 1 1], 'FontSize', 20);
-        text(size(MRS_struct.mask.(vox{kk}).img{ii},2) - 20, size(MRS_struct.mask.(vox{kk}).img{ii},1)/2, 'R', 'Color', [1 1 1], 'FontSize', 20);
+        text(0.01, 0.5, 'L', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
+        text(0.16, 0.95, 'A', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
+        text(0.32, 0.5, 'A', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
+        text(0.5, 0.95, 'S', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
+        text(0.825, 0.95, 'S', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
+        text(0.975, 0.5, 'R', 'Color', [1 1 1], 'FontSize', 20, 'Units', 'normalized');
         set(hb, 'Position', [0 0.15 1 1]);
         title(t, 'FontName', 'Arial', 'FontSize', 15, 'Interpreter', 'none');
 
@@ -200,7 +207,7 @@ for ii = 1:numscans
         d.width  = 1;
         d.height = 0.02;
         axes('Position', [d.left d.bottom d.width d.height], 'Units', 'normalized');
-        text(0.9925, 0, MRS_struct.version.Gannet, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'right');
+        text(0.9925, 0, MRS_struct.info.version.Gannet, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 14, 'FontWeight', 'bold', 'HorizontalAlignment', 'right');
         axis off;
 
         % Gannet documentation
@@ -213,7 +220,7 @@ for ii = 1:numscans
         d.bottom = 0.98;
         axes('Position', [d.left d.bottom d.width d.height], 'Units', 'normalized');
         text(0.0075, 0, ['Batch file: ' num2str(ii) ' of ' num2str(MRS_struct.p.numScans)], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 11, 'HorizontalAlignment', 'left');
-        text(0.9925, 0, char(datetime('now','Format','dd-MMM-y HH:mm:ss')), 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 11, 'HorizontalAlignment', 'right');
+        text(0.9925, 0, char(datetime('now','Format',"dd-MMM-y HH:mm:ss")), 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 11, 'HorizontalAlignment', 'right');
         axis off;
 
         % For Philips .data
@@ -224,8 +231,15 @@ for ii = 1:numscans
             fullpath = regexprep(fullpath, '/', '_');
         end
         
-        [~,metabfile_nopath] = fileparts(MRS_struct.metabfile{ii});
-        
+        if strcmp(MRS_struct.p.vendor, 'Siemens_rda')
+            [~, metabfile_nopath] = fileparts(MRS_struct.metabfile{ii*2-1});
+        else
+            [~, metabfile_nopath, ext] = fileparts(MRS_struct.metabfile{ii});
+            if strcmpi(ext, '.gz')
+                metabfile_nopath(end-3:end) = [];
+            end
+        end
+
         if any(strcmp(listfonts,'Arial'))
             set(findall(h,'-property','FontName'),'FontName','Arial');
         end

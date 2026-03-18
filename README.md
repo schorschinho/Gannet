@@ -19,10 +19,10 @@ Full software documentation can be found [here](https://markmikkelsen.github.io/
 Gannet is a free, open-source MATLAB-based software toolkit for analyzing edited single-voxel <sup>1</sup>H magnetic resonance spectroscopy (MRS) data. Its largely automated functions cover all the essential steps of modern MRS analysis:
 
 - Loading raw data
-- Substantial preprocessing
+- Several preprocessing steps
 - Signal modeling
-- Voxel co-registration with structural MR images
-- Concentration estimation based on tissue composition
+- Voxel co-registration to and segmentation of structural MR images
+- Metabolite concentration estimation corrected for tissue composition
 
 Several existing software packages for MRS data analysis require substantial user input or offer a wide selection of processing options. In contrast, the philosophy behind Gannet is to provide users with a complete automated pipeline without the need for significant user input.
 
@@ -32,7 +32,7 @@ Additionally, as open-source software, advanced users have the ability to modify
 
 ### Prerequisites  
 
-Gannet runs in [MATLAB](https://mathworks.com/products/matlab.html). For best performance, we recommend using the latest release if possible. Additionally, Gannet requires that the following MATLAB toolboxes are installed:
+Gannet runs in [MATLAB](https://mathworks.com/products/matlab.html). For best performance, we recommend using the latest release of MATLAB if possible. Additionally, Gannet requires that the following MATLAB toolboxes are installed:
 
 - Image Processing
 - Optimization
@@ -51,7 +51,7 @@ Alternatively, Git users can clone the Gannet repository into a directory of the
 
 `git clone https://github.com/markmikkelsen/Gannet.git`
 
-The development version can be downloaded from the <a href="https://github.com/markmikkelsen/Gannet/tree/dev" target="_blank">development branch</a> on GitHub or by using the following git command if the repository was cloned:
+The development version can be downloaded from the <a href="https://github.com/markmikkelsen/Gannet/tree/dev" target="_blank">development branch</a> on GitHub or by using the following Git command if the repository was cloned:
 
 `git checkout dev`
 
@@ -69,7 +69,7 @@ SPM12 can be installed in the same manner after it has been downloaded from the 
 
 ## Compatibility
 
-Gannet is currently being developed in MATLAB R2023b in macOS 14 Sonoma (Apple silicon). While reasonable effort is made to ensure legacy and cross-OS compatibility, an error-free user experience is not guaranteed.
+Gannet is currently being developed in MATLAB R2025b in macOS 26 Tahoe (Apple silicon). While reasonable effort is made to ensure legacy and cross-OS compatibility, an error-free user experience is not guaranteed.
 
 ## Supported file formats
 
@@ -101,15 +101,22 @@ The Gannet team can also be <a href="mailto:mam4041@med.cornell.edu?subject=[Gan
 
 Gannet uses a form of [semantic versioning](https://semver.org/) in the style 'x.x.x' to mark code releases. Versioning is also conducted on a module-specific basis using the style 'YYMMDD'. That is, each Gannet module has its own release version. Users should note that module-specific versions sometimes are updated despite the semantic version number remaining unchanged (typically for minor updates/bug fixes).
 
-## Developers
+## Lead developer
 
-- Richard Edden (Johns Hopkins University) - creator
-- Mark Mikkelsen (Weill Cornell Medicine) - lead developer
-- Georg Oeltzschner (Johns Hopkins University) - contributor
-- Muhammad Saleh (Children's Hospital of Philadelphia) - contributor
-- C. John Evans (Cardiff University) - contributor
-- Ashley Harris (University of Calgary) - contributor
-- Nicolaas Puts (King's College London) - contributor
+- Mark Mikkelsen (Weill Cornell Medicine)
+
+## Creator
+
+- Richard A. E. Edden (Johns Hopkins University School of Medicine)
+
+## Contributors
+
+- Georg Oeltzschner (Johns Hopkins University School of Medicine)
+- Muhammad G. Saleh (Children's Hospital of Philadelphia)
+- Helge J. Zöllner (Johns Hopkins University School of Medicine)
+- Nicolaas A. J. Puts (King's College London)
+- C. John Evans (Cardiff University)
+- Ashley D. Harris (University of Calgary)
 
 ## License and citing Gannet
 
@@ -147,7 +154,7 @@ or the Gasparovic et al. method:
 
 ## Acknowledgments
 
-The development and dissemination of Gannet has been supported by the following NIH grants:
+The development and dissemination of Gannet has been supported by the following National Institutes of Health (NIH) grants:
 
 - R01 EB016089
 - R01 EB023963
@@ -166,7 +173,7 @@ We wish to thank the following individuals for their direct or indirect contribu
 - Philipp Ehses (Max Planck Institute for Biological Cybernetics)
 - Robin de Graaf (Yale School of Medicine)
 - Xiangrui Li (Ohio State University)
-- Jamie Near (McGill University)
-- Ralph Noeske (GE Healthcare)
+- Jamie Near (Sunnybrook Research Institute/University of Toronto)
+- Ralph Noeske (GE HealthCare)
 - Wouter Potters (UMC Amsterdam)
 - Jan Simon (Heidelberg)

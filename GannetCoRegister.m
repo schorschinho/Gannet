@@ -1,13 +1,35 @@
 function MRS_struct = GannetCoRegister(MRS_struct, struc)
-
 % Co-registration of MRS voxel volumes to imaging datasets, based on headers.
 
-if nargin < 2
+if nargin < 1 || ...
+    (nargin < 2 && ~(isfield(MRS_struct, 'p') && isfield(MRS_struct.p, 'bids') && MRS_struct.p.bids))
     fprintf('\n');
-    error('MATLAB:minrhs', 'Not enough input arguments.');
+    error('MATLAB:minrhs', ['Not enough input arguments. ' ...
+          'GannetCoRegister requires two arguments (MRS_struct, struc), ' ...
+          'unless processing a BIDS dataset, in which case only MRS_struct ' ...
+          'is required.']);
 end
 
-MRS_struct.version.coreg = '230823';
+if ~isstruct(MRS_struct)
+    fprintf('\n');
+    error('The first input argument must be a structure, but received %s.', class(MRS_struct));
+end
+
+if nargin == 2
+    if ~iscell(struc)
+        fprintf('\n');
+        error('The second input argument ''%s'' must be a structure.', struc);
+    end
+end
+
+MRS_struct.info.datetime.coreg = datetime('now');
+MRS_struct.info.version.coreg = '250914';
+
+if ~isMATLABReleaseOlderThan("R2025a") && MRS_struct.p.append
+    font_size_adj = 2.75;
+else
+    font_size_adj = 0;
+end
 
 warning('off'); % temporarily suppress warning messages
 
@@ -32,7 +54,26 @@ else
     vox = MRS_struct.p.vox(1);
 end
 
-struc = GetFullPath(struc);
+% Find MR images if processing a BIDS dataset
+if MRS_struct.p.bids
+    struc = cell(MRS_struct.p.numScans,1);
+    for ii = 1:MRS_struct.p.numScans
+        bids_file = bids.File(MRS_struct.metabfile{ii});
+        if ~exist(fullfile(MRS_struct.out.BIDS.pth, 'derivatives', 'Gannet_output', bids_file.bids_path), 'dir')
+            bids.util.mkdir(fullfile(MRS_struct.out.BIDS.pth, 'derivatives', 'Gannet_output', bids_file.bids_path));
+        end
+        metadata = bids.internal.get_metadata(bids.internal.get_meta_list(MRS_struct.metabfile{ii}));
+        try
+            struc{ii} = bids.internal.resolve_bids_uri(metadata.AnatomicalImage, MRS_struct.out.BIDS);
+        catch
+            fprintf('\n');
+            error(['No valid structural images found for ''%s''.' ...
+                   '\nCheck that its JSON sidecar file has an entry for ''AnatomicalImage''.'], bids_file.filename);
+        end
+    end
+else
+    struc = GetFullPath(struc);
+end
 
 if MRS_struct.p.numScans ~= length(struc)
     fprintf('\n');
@@ -131,6 +172,9 @@ for ii = 1:MRS_struct.p.numScans
         else
             h = figure(103);
         end
+        if ~isMATLABReleaseOlderThan("R2025a")
+            h.Theme = 'light';
+        end
         % Open figure in center of screen
         scr_sz = get(0,'ScreenSize');
         fig_w = 1000;
@@ -145,53 +189,53 @@ for ii = 1:MRS_struct.p.numScans
         set(ha, 'Position', [0 pos(2) 1 pos(4)]);
         axis off;
 
-        [~,tmp,tmp2] = fileparts(MRS_struct.mask.(vox{kk}).outfile{ii});
-        fname = [tmp tmp2];
+        [~,name,ext] = fileparts(MRS_struct.mask.(vox{kk}).fname{ii});
+        fname = [name ext];
         if length(fname) > 30
             fname = [fname(1:12) '...' fname(end-11:end)];
         end
-        text(0.5, 0.75, 'Mask output: ', 'Units', 'normalized', 'HorizontalAlignment' , 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.75, [' ' fname], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13, 'Interpreter', 'none');
+        text(0.5, 0.75, 'Mask output: ', 'Units', 'normalized', 'HorizontalAlignment' , 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.75, [' ' fname], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj, 'Interpreter', 'none');
 
-        text(0.5, 0.63, 'Spatial parameters: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.63, ' [LR, AP, FH]', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        text(0.5, 0.63, 'Spatial parameters: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.63, ' [LR, PA, SI]', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
 
-        tmp = [' ' num2str(MRS_struct.p.voxdim(ii,1)) ' \times ' num2str(MRS_struct.p.voxdim(ii,2)) ' \times ' num2str(MRS_struct.p.voxdim(ii,3)) ' mm^{3}'];
-        text(0.5, 0.51, 'Dimensions: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.51, tmp, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13, 'Interpreter', 'tex');
+        str = [' ' num2str(MRS_struct.p.voxdim(ii,1)) ' \times ' num2str(MRS_struct.p.voxdim(ii,2)) ' \times ' num2str(MRS_struct.p.voxdim(ii,3)) ' mm^{3}'];
+        text(0.5, 0.51, 'Dimensions: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.51, str, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj, 'Interpreter', 'tex');
 
-        tmp = [' ' num2str(prod(MRS_struct.p.voxdim(ii,:))/1e3) ' mL'];
-        text(0.5, 0.39, 'Volume: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.39, tmp, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        str = [' ' num2str(prod(MRS_struct.p.voxdim(ii,:))/1e3) ' mL'];
+        text(0.5, 0.39, 'Volume: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.39, str, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
 
-        tmp = [' [' num2str(MRS_struct.p.voxoff(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxoff(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxoff(ii,3), '%3.1f') '] mm'];
-        text(0.5, 0.27, 'Position: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.27, tmp, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        str = [' [' num2str(MRS_struct.p.voxoff(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxoff(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxoff(ii,3), '%3.1f') '] mm'];
+        text(0.5, 0.27, 'Position: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.27, str, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
 
         if any(strcmp(MRS_struct.p.vendor, {'Philips', 'Philips_data'}))
-            tmp = [' [' num2str(MRS_struct.p.voxang(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,3), '%3.1f') '] deg'];
+            str = [' [' num2str(MRS_struct.p.voxang(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,3), '%3.1f') '] deg'];
         else
-            tmp = [' [' num2str(MRS_struct.p.voxang(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,3), '%3.1f') '] deg'];
+            str = [' [' num2str(MRS_struct.p.voxang(ii,1), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,2), '%3.1f') ', ' num2str(MRS_struct.p.voxang(ii,3), '%3.1f') '] deg'];
         end
-        text(0.5, 0.15, 'Angulation: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.15, tmp, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        text(0.5, 0.15, 'Angulation: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.15, str, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
 
-        text(0.5, 0.03, 'CoRegVer: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13);
-        text(0.5, 0.03, [' ' MRS_struct.version.coreg], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13);
+        text(0.5, 0.03, 'CoRegVer: ', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
+        text(0.5, 0.03, [' ' MRS_struct.info.version.coreg], 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 13 - font_size_adj);
 
         hb = subplot(2,3,1:3);
 
         if strcmp(MRS_struct.p.vendor, 'Siemens_rda')
-            [~,tmp,tmp2] = fileparts(MRS_struct.metabfile{1,ii*2-1});
+            [~,name,ext] = fileparts(MRS_struct.metabfile{1,ii*2-1});
         else
-            [~,tmp,tmp2] = fileparts(MRS_struct.metabfile{1,ii});
+            [~,name,ext] = fileparts(MRS_struct.metabfile{1,ii});
         end
-        fname = [tmp tmp2];
+        fname = [name ext];
         if length(fname) > 30
             fname = [fname(1:12) '...' fname(end-11:end)];
         end
-        [~,tmp3,tmp4] = fileparts(MRS_struct.mask.(vox{kk}).T1image{ii});
-        T1image = [tmp3 tmp4];
+        [~,name,ext] = fileparts(MRS_struct.mask.(vox{kk}).T1image{ii});
+        T1image = [name ext];
         if length(T1image) > 30
             T1image = [T1image(1:12) '...' T1image(end-11:end)];
         end
@@ -199,10 +243,14 @@ for ii = 1:MRS_struct.p.numScans
 
         imagesc(MRS_struct.mask.(vox{kk}).img{ii});
         axis equal tight off;
-        text(10, size(MRS_struct.mask.(vox{kk}).img{ii},1)/2, 'L', 'Color', [1 1 1], 'FontSize', 20);
-        text(size(MRS_struct.mask.(vox{kk}).img{ii},2) - 20, size(MRS_struct.mask.(vox{kk}).img{ii},1)/2, 'R', 'Color', [1 1 1], 'FontSize', 20);
+        text(0.01, 0.5, 'L', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
+        text(0.16, 0.95, 'A', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
+        text(0.32, 0.5, 'A', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
+        text(0.5, 0.95, 'S', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
+        text(0.825, 0.95, 'S', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
+        text(0.975, 0.5, 'R', 'Color', [1 1 1], 'FontSize', 20 - font_size_adj, 'Units', 'normalized');
         set(hb,'Position',[0 0.15 1 1]);
-        title(t, 'FontName', 'Arial', 'FontSize', 15, 'Interpreter', 'none');
+        title(t, 'FontName', 'Arial', 'FontSize', 15 - font_size_adj, 'Interpreter', 'none');
 
         % Save output as PDF
         run_count = SavePDF(h, MRS_struct, ii, 1, kk, vox, mfilename, run_count);

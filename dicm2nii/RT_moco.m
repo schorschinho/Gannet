@@ -26,7 +26,6 @@ hs.fig = fh;
 hs.rootDir = getpref('dicm2nii_gui_para', 'incomingDcm', '../incoming_DICOM/');
 hs.backupDir = getpref('dicm2nii_gui_para', 'backupDir', '');
 fullName = dicm2nii('', 'fullName', 'func_handle');
-hs.dicm = fullName('../DICM/');
 hs.rootDir = fullName(hs.rootDir);
 if isfolder(hs.backupDir), hs.backupDir = fullName(hs.backupDir); end
 hs.logDir = [hs.rootDir 'RTMM_log/'];
@@ -158,8 +157,8 @@ function errorLog(obj, evt) %#ok
 hs = guidata(obj.UserData);
 vnam = hs.series.String;
 if iscell(vnam) && numel(vnam)>1, vnam = vnam{1}; end
-vnam = hs.subj.String+"_"+hs.series.UserData+"_"+hs.instnc.String+vnam;
-vnam = genvarname("err_"+vnam);
+vnam = hs.subj.String+"_"+hs.series.UserData+hs.instnc.String+"_"+vnam;
+vnam = matlab.lang.makeValidName("err_"+vnam);
 eval(vnam +" = evt;");
 fnam = hs.logDir+"errorLog.mat";
 if isfile(fnam), save(fnam, vnam, '-append'); else, save(fnam, vnam); end
@@ -178,14 +177,15 @@ nam = dir([bNam '000001_*.dcm']);
 if isempty(nam), return; end
 s = dicm_hdr_wait(nam, []);
 if isempty(s), return; end % non-image dicom, skip series
-if size(hs.table.Data,1)<1 && datetime-datetime(nam.date)<minutes(5)
+if size(hs.table.Data,1)<1 && datetime-nam.date<minutes(5)
     save([hs.rootDir '/hdr_' hs.subj.String], 's'); % as new subj flag
 end
 
-hs.fig.WindowState = 'maximized';
 L0 = java.awt.MouseInfo.getPointerInfo().getLocation();
 java.awt.Robot().mouseMove(L0.getX+9, L0.getY+9); % wake up screen
 pause(0.1); java.awt.Robot().mouseMove(L0.getX, L0.getY);
+! gsettings set org.gnome.desktop.a11y.applications screen-keyboard-enabled false
+hs.fig.WindowState = 'maximized';
 
 if hs.derived.Checked=="on" && contains(s.ImageType, 'DERIVED'), return; end
 if hs.SBRef.Checked=="on" && endsWith(s.SeriesDescription, '_SBRef'), return; end
@@ -269,7 +269,6 @@ for i = 2:nTR
     set_img(hs.img, img); hs.instnc.String = num2str(i);
     hs.slider.Value = i; % show progress
     if isDTI, continue; end % give up for now
-    
 
     p.F.Values = smooth_mc(img, p.sz);
     [m6(2,:), R1] = moco_estim(p, R1);
@@ -300,8 +299,9 @@ end
 function new = new_series(hs)
 try setCountDown(hs); end
 f = hs.subj.UserData;
-if ~isempty(f) % check next file for current subj
+if ~isempty(f) % check next series for current subj
     nams = dir([f '/*_*_000001*.dcm']); % 1st instance for all series
+    [~, a] = sort([nams.datenum]); nams = nams(a);
     i = find(startsWith({nams.name}, hs.series.UserData), 1);
     if i < numel(nams)
         hs.series.UserData = nams(i+1).name(1:11);
@@ -309,7 +309,7 @@ if ~isempty(f) % check next file for current subj
     end
 end
 new = false;
-fs = dir([hs.dicm '20*']); % subj folder format: yyyymmdd.PatientName.PatientID
+fs = dir([hs.rootDir '20*']); % subj folder format: yyyymmdd.PatientName.PatientID
 valid = cellfun(@(c)~isempty(regexp(c,'\d{8}\.[\w\d]+\.[\w\d]+','once')), {fs.name});
 fs = fs(valid & [fs.isdir]);
 for i = numel(fs):-1:1
@@ -320,29 +320,19 @@ for i = numel(fs):-1:1
     hs.subj.UserData = fullfile(fs(i).folder, fs(i).name);
     hs.subj.String = subj;
     nams = dir([hs.subj.UserData '/*_*_000001*.dcm']);
+    [~, a] = sort([nams.datenum]); nams = nams(a);
     hs.series.UserData = nams(1).name(1:11);
     new = true; return;
 end
 if ~isfile([hs.rootDir 'dClock']); return; end % rest only for RTMM computer
+try EyelinkStart(hs.rootDir); end
 QC_report(hs.subj);
-
-% Backup subj folder around 2AM
-if ~isfolder(hs.backupDir) || abs(datetime-datetime('today')-hours(2))>seconds(9); return; end
-for i = 1:numel(fs)
-    f = fs(i).name;
-    if isempty(regexp(f, '\d{8}\.\d{4,6}\w{2}', 'once')), continue; end
-    if isfolder([hs.backupDir f]), continue; end
-    [err, str] = system(['cp -p -r ' hs.dicm f ' ' hs.backupDir]);
-    if err, errorLog(hs.timer, str); return; end
-end
-fid = fopen([hs.rootDir '/archived.txt'], 'a');
-fprintf(fid, '%s\r\n', fs.name);
-fclose(fid);
+houseKeeping(hs);
 
 %% Initialize GUI for a new series
 function init_series(hs, s, nTR)
 fid = fopen([hs.rootDir 'currentSeries.txt'], 'w');
-fprintf(fid, '%s_%s_%s', s.PatientName, asc_header(s, 'tProtocolName'), s.AcquisitionDateTime(3:12));
+fprintf(fid, '%s_%s_%s', s.PatientID, asc_header(s, 'tProtocolName'), s.AcquisitionDateTime(3:12));
 fclose(fid);
 
 set(hs.slider, 'Max', nTR, 'Value', 1, 'UserData', seriesBase(s.Filename));
@@ -462,7 +452,7 @@ end
 hs.instnc.String = '';
 hs.series.String = C{iT,1}; % in case hdr not saved
 try s = hs.fig.UserData.hdr{iR}; catch, set_img(hs.img, inf(2)); return; end
-if ~isfile(s.Filename), s.Filename = strrep(s.Filename, hs.dicm, hs.backupDir); end
+if ~isfile(s.Filename), s.Filename = strrep(s.Filename, hs.rootDir, hs.backupDir); end
 
 iIN = ceil(nTR/2); % start with middle Instance if avail
 nam = dir(sprintf('%s%06g.dcm', seriesBase(s.Filename), iIN));
@@ -618,7 +608,7 @@ end
 d = size(in);
 I = {1:d(1) 1:d(2) 1:d(3)};
 n = sz/3;
-if numel(n)==1, n = n*[1 1 1]; end
+if isscalar(n), n = n*[1 1 1]; end
 J = {1:n(1):d(1) 1:n(2):d(2) 1:n(3):d(3)};
 intp = 'linear';
 F = griddedInterpolant(I, out, intp);
@@ -670,12 +660,8 @@ tEnd = datetime + seconds(2); % wait till file ready
 nam = [nam.folder '/' nam.name];
 while 1
     s = dicm_hdr(nam, dict);
-    try
-        if s.PixelData.Start+s.PixelData.Bytes <= s.FileSize, return; end
-    catch me
-    end
-    if datetime>tEnd, fprintf(2,'%s\n', nam); rethrow(me); end % give up
-    pause(0.1);
+    try if s.PixelData.Start+s.PixelData.Bytes <= s.FileSize, return; end; end
+    if datetime>tEnd, return; else, pause(0.1); end
 end
 
 %% User closing GUI: stop and delete timer
@@ -725,7 +711,7 @@ if ~any(is3D), view_3D(h); return; end % no T1, just show in nii_viewer
 is3D = find(is3D, 1, 'last');
 a = seriesBase(hdrs{is3D}.Filename);
 nams = dir([a '*.dcm']);
-if isempty(nams), nams = dir([strrep(a, hs.dicm, hs.backupDir) '*.dcm']); end
+if isempty(nams), nams = dir([strrep(a, hs.rootDir, hs.backupDir) '*.dcm']); end
 nams = strcat(nams(1).folder, '/', {nams.name});
 T1w = dicm2nii(nams, ' ', 'no_save');
 nams = dir([hs.slider.UserData '*.dcm']);
@@ -741,7 +727,7 @@ if isempty(h.UserData), return; end
 h.Value = round(h.Value);
 base = sprintf('%s%06u*.dcm', h.UserData, h.Value);
 nam = dir(base);
-if isempty(nam), nam = dir(strrep(base, hs.dicm, hs.backupDir)); end
+if isempty(nam), nam = dir(strrep(base, hs.rootDir, hs.backupDir)); end
 if isempty(nam), return; end
 set_img(hs.img, dicm_img(fullfile(nam(1).folder, nam(1).name)));
 hs.instnc.String = num2str(h.Value);
@@ -847,11 +833,11 @@ if nargin>1 % calling from menu
     subj = hs.subj.String;
 else
     nam = dir([hs.rootDir 'closed_*']);
-    if isempty(nam) || datetime-datetime(nam(1).date)<seconds(1) || ...
-            isfile([hs.rootDir 'EyelinkRecording.mat']); return; end
+    if isempty(nam) || datetime-nam(1).date<seconds(1), return; end
+    EyelinkStop([hs.rootDir 'EyelinkStarted']);
     nam = [hs.rootDir nam(1).name];
     done = onCleanup(@()movefile(nam, strrep(nam, 'closed_', 'done_')));
-    subj = regexp(nam, '(?<=closed_)\d{4}\w{2}$', 'match', 'once');
+    subj = regexp(nam, '(?<=closed_)\d{4,6}\w{2}$', 'match', 'once');
 end
 rmQC = onCleanup(@()delete('./tmp_QC_*.pdf'));
 try load([hs.rootDir 'RTMM_log/' subj '.mat'], 'T3'); catch, return; end
@@ -874,16 +860,17 @@ ax = axes(fig, 'Position', [0.1 0.92 0.8 0.03], 'Visible', 'off');
 text(ax, 0.5, 1, subj, 'FontSize', 18, 'HorizontalAlignment', 'center');
 s = uDat.hdr{1};
 text(ax, 0.5, 0, dicmDT(s,'eeee MMM d, y'), 'FontSize', 12, 'HorizontalAlignment', 'center');
-tbl = cell(0, 5);
-dict = dicm_dict('', {'AcquisitionDateTime' 'AcquisitionDate' ...
-    'AcquisitionTime' 'SeriesNumber' 'SeriesDescription'});
-bnam = seriesBase(s.Filename);
-for i = 1:uDat.hdr{end}.SeriesNumber+5
-    nams = dir([bnam(1:end-7) sprintf('%06i_',i) '*.dcm']);
-    if isempty(nams), continue; end
-    s = dicm_hdr([nams(1).folder '/' nams(1).name], dict);
-    try a = T3.MeanFD{T3.SeriesNumber == s.SeriesNumber}; catch, a = []; end
-    tbl(end+1,:) = {s.SeriesNumber dicmDT(s,'HH:mm:ss') numel(nams) s.SeriesDescription a}; %#ok
+f = [fileparts(s.Filename) filesep];
+nam1 = dir([f '*_*_000001*.dcm']); % 1st instance for all series
+[~, a] = sort([nam1.datenum]); nam1 = {nam1(a).name};
+tbl = cell(numel(nam1), 5);
+dict = dicm_dict('', {'AcquisitionDateTime' 'SeriesNumber' 'SeriesDescription'});
+for i = 1:size(tbl,1)
+    nams = dir([f nam1{i}(1:11) '*.dcm']);
+    s = dicm_hdr([f nams(1).name], dict);
+    ind = T3.SeriesNumber==s.SeriesNumber & strcmp(s.SeriesDescription, T3.Description);
+    if any(ind), a = T3.MeanFD{find(ind,1)}; else, a = []; end
+    tbl(i,:) = {s.SeriesNumber dicmDT(s,'HH:mm:ss') numel(nams) s.SeriesDescription a};
 end
 tbl = cellfun(@num2str, tbl, 'UniformOutput', false); % for left-align
 vName = {'SeriesNumber' 'Time' 'TotalInstances' 'Description' 'meanFD'};
@@ -931,6 +918,7 @@ for i = 1:numel(uDat.hdr)
             t0 = seconds(timeofday(dicmDT(s)));
             [mi, j] = min(abs(EL.tg - t0));
             if mi<5 % recording started late if mi too large
+                try
                 TR = asc_header(s, 'alTR[0]')*1e-6;
                 while j>1 && abs(diff(EL.tg([j-1 j]))-TR)<0.1, j = j-1; end
                 % fprintf('%4.2f\n', EL.tg(j)-t0); % normally <1
@@ -942,6 +930,9 @@ for i = 1:numel(uDat.hdr)
                 plot(ax0, el{end}{1}, 'b');
                 set(ax0, 'XLim', [1 nP], 'XTick', []);
                 ylabel(ax0, 'Pupil Size', 'Color', 'b');
+                catch, y = y - 0.32; clear ax0;
+                end
+            else, y = y - 0.32; clear ax0;
             end
         else, y = y - 0.32; clear ax0;
         end
@@ -1026,5 +1017,32 @@ end
 function dt = dicmDT(s, fmt)
 dt = datetime(s.AcquisitionDateTime, 'InputFormat', 'yyyyMMddHHmmss.SSSSSS');
 if nargin>1, dt.Format = fmt; dt = char(dt); end
+
+%% Start pupil area recording if requested by EyelinkRecordStart
+function EyelinkStart(f)
+nam = [f 'EyelinkRecordStart'];
+if ~isfile(nam), return; end
+try if Eyelink('IsConnected'), return; end; catch, return; end
+if Eyelink('Initialize'), error('Eyelink connection failed.'); end
+Eyelink('Openfile', 'tmp.edf'); % overwrite
+Eyelink('Command', 'sample_rate = 250'); % low rate: small file size
+Eyelink('Command', 'file_sample_data = AREA,BUTTON'); % add HREF? 
+Eyelink('Command', 'file_event_filter = MESSAGE'); % not sure needed
+Eyelink('StartRecording', 1, 0, 0, 0); % file_samples/events link_samples/events
+DICM_secs = load([f 'dClock'], '-ascii') + seconds(datetime('now')-datetime('today'));
+Eyelink('Message', sprintf('DICM_secs=%.3f', DICM_secs));
+movefile([f 'EyelinkRecordStart'], [f 'EyelinkStarted']);
+
+%% Stop Eyelink recording if EyelinkStarted exists
+function EyelinkStop(nam)
+if ~isfile(nam); return; end
+if ~Eyelink('IsConnected'), Eyelink('Initialize'); end
+fnam = [fileparts(nam) '/RTMM_log/' fileread(nam) char(datetime('now', 'Format', '_HHmmss')) '.edf'];
+Eyelink('StopRecording');
+Eyelink('CloseFile');
+Eyelink('Command', 'sample_rate = 1000');
+Eyelink('ReceiveFile', 'tmp.edf', fnam);
+Eyelink('Shutdown');
+delete(nam);
 
 %%

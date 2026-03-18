@@ -1,13 +1,14 @@
 function MRS_struct = GannetFitPhantom(MRS_struct, varargin)
 % GannetFitPhantom
-% Updates by MM 2018-2023
+% Updates by MM 2018-2024
 
 if nargin == 0
     fprintf('\n');
     error('MATLAB:minrhs', 'Not enough input arguments.');
 end
 
-MRS_struct.version.fit_phantom = '230729';
+MRS_struct.info.datetime.fit_phantom = datetime('now');
+MRS_struct.info.version.fit_phantom = '240207';
 
 if MRS_struct.p.PRIAM
     vox = MRS_struct.p.vox;
@@ -299,6 +300,9 @@ for kk = 1:length(vox)
                 h = figure('Visible', 'off');
             else
                 h = figure(102);
+            end
+            if ~isMATLABReleaseOlderThan("R2025a")
+                h.Theme = 'light';
             end
             % Open figure in center of screen
             scr_sz = get(0,'ScreenSize');
@@ -622,7 +626,7 @@ for kk = 1:length(vox)
                 
                 % 6. FitVer
                 text(0.4, text_pos-10.5*shift, 'FitVer: ', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10, 'HorizontalAlignment', 'right');
-                text(0.425, text_pos-10.5*shift, MRS_struct.version.fit_phantom, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10);
+                text(0.425, text_pos-10.5*shift, MRS_struct.info.version.fit_phantom, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10);
                 
             else
                 
@@ -642,7 +646,7 @@ for kk = 1:length(vox)
                 
                 % 5. FitVer
                 text(0.4, text_pos-7.5*shift, 'FitVer: ', 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10, 'HorizontalAlignment', 'right');
-                text(0.425, text_pos-7.5*shift, MRS_struct.version.fit_phantom, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10);
+                text(0.425, text_pos-7.5*shift, MRS_struct.info.version.fit_phantom, 'Units', 'normalized', 'FontName', 'Arial', 'FontSize', 10);
                 
             end
             
@@ -656,15 +660,15 @@ for kk = 1:length(vox)
     % Reorder structure
     if isfield(MRS_struct, 'mask')
         if isfield(MRS_struct, 'waterfile')
-            structorder = {'version', 'ii', 'metabfile', 'waterfile', 'p', 'fids', 'spec', 'out', 'mask'};
+            structorder = {'info', 'ii', 'metabfile', 'waterfile', 'p', 'fids', 'spec', 'out', 'mask'};
         else
-            structorder = {'version', 'ii', 'metabfile', 'p', 'fids', 'spec', 'out', 'mask'};
+            structorder = {'info', 'ii', 'metabfile', 'p', 'fids', 'spec', 'out', 'mask'};
         end
     else
         if isfield(MRS_struct, 'waterfile')
-            structorder = {'version', 'ii', 'metabfile', 'waterfile', 'p', 'fids', 'spec', 'out'};
+            structorder = {'info', 'ii', 'metabfile', 'waterfile', 'p', 'fids', 'spec', 'out'};
         else
-            structorder = {'version', 'ii', 'metabfile', 'p', 'fids', 'spec', 'out'};
+            structorder = {'info', 'ii', 'metabfile', 'p', 'fids', 'spec', 'out'};
         end
     end
     MRS_struct = orderfields(MRS_struct, structorder);

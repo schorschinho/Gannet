@@ -24,7 +24,7 @@ if nargin < 2
     str = fread(fileID, Inf, '*uchar');
     fclose(fileID);
     str = char(str(:)');
-    expression = '(?<field>MRS_struct.version.Gannet = )''(?<version>.*?)''';
+    expression = '(?<field>MRS_struct.info.version.Gannet = )''(?<version>.*?)''';
     out = regexp(str, expression, 'names');
     currentVersion = out.version;
     if nargin < 1
@@ -43,15 +43,15 @@ if nargin < 2 || isempty(lastCheckTime) || (datetime('now') - lastCheckTime) > d
         end
         newVersionAvailable = 0;
     else
-        expression = '(?<field>MRS_struct.version.Gannet = )''(?<version>.*?)''';
+        expression = '(?<field>MRS_struct.info.version.Gannet = )''(?<version>.*?)''';
         out = regexp(str, expression, 'names');
         latestVersion = out.version;
         if str2double(latestVersion(regexpi(latestVersion,'\d'))) > str2double(currentVersion(regexpi(currentVersion,'\d')))
             newVersionAvailable = 1;
             msg = ['\n', ...
                    '***********************************************************************************************\n', ...
-                   'A newer version of Gannet (%s) is available. You are currently using version %s.\n' ...
-                   'You can download the newer version from GitHub or run UpdateGannet to install it directly.\n', ...
+                   'A newer version of Gannet (%s) is available. You are currently running version %s.\n' ...
+                   'You can download the latest version from GitHub or run UpdateGannet to install it directly.\n', ...
                    '***********************************************************************************************\n\n'];
             msg = hyperlink('https://github.com/markmikkelsen/Gannet', 'GitHub', msg);
             msg = hyperlink('matlab:UpdateGannet', 'UpdateGannet', msg);

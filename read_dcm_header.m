@@ -39,7 +39,7 @@ end
 while isempty(strfind(tline, head_end_text))
     [tokens, ~] = regexp(tline,'([\w\[\].]*)\s*=\s*([\w.-\"\\]*)','tokens','match');
     % When a matching string is found, parse the results into a struct
-    if length(tokens) == 1
+    if isscalar(tokens)
         fieldname = regexprep(tokens{1}{1}, '\[|\]|_',''); % delete invalid characters
         if isempty(strfind(tokens{1}{2},'"'))
             if strcmp(tokens{1}{2},'0x1')
@@ -112,7 +112,9 @@ elseif strfind(DicomHeader.sequenceFileName,'svs_se')
 elseif strfind(DicomHeader.sequenceFileName,'svs_slaser')
     DicomHeader.seqtype = 'sLASER'; % sLASER
 elseif strfind(DicomHeader.sequenceFileName,'st_vapor_643')
-    DicomHeader.seqtype = 'STEAM'; % PRESS
+    DicomHeader.seqtype = 'STEAM'; % STEAM
+elseif strfind(DicomHeader.sequenceFileName, '%SiemensSeq%\svs_st')
+    DicomHeader.seqtype = 'STEAM'; % Siemens 7T Terra.X product STEAM sequence
 else
     DicomHeader.seqorig = DicomHeader.sequenceFileName;
     error(['Unknown sequence: ' DicomHeader.seqorig '. Please consult the Gannet team for support.'])
@@ -145,8 +147,10 @@ for pp = 1:length(VoI_Params)
     if ~isfield(dcmHeader.sSpecPara.sVoI.sNormal, VoI_Params{pp})
         dcmHeader.sSpecPara.sVoI.sNormal.(VoI_Params{pp}) = realmin('double');
     end
-    if ~isfield(dcmHeader.sSpecPara.sVoI.sPosition, VoI_Params{pp})
-        dcmHeader.sSpecPara.sVoI.sPosition.(VoI_Params{pp}) = realmin('double');
+    if isfield(dcmHeader.sSpecPara.sVoI, 'sPosition')
+        if ~isfield(dcmHeader.sSpecPara.sVoI.sPosition, VoI_Params{pp})
+            dcmHeader.sSpecPara.sVoI.sPosition.(VoI_Params{pp}) = realmin('double');
+        end
     end
 end
 
@@ -157,9 +161,11 @@ DicomHeader.VoIThickness   = dcmHeader.sSpecPara.sVoI.dThickness; % Voxel size i
 DicomHeader.NormCor        = dcmHeader.sSpecPara.sVoI.sNormal.dCor; % Coronal component of normal vector of voxel
 DicomHeader.NormSag        = dcmHeader.sSpecPara.sVoI.sNormal.dSag; % Sagittal component of normal vector of voxel
 DicomHeader.NormTra        = dcmHeader.sSpecPara.sVoI.sNormal.dTra; % Transversal component of normal vector of voxel
-DicomHeader.PosCor         = dcmHeader.sSpecPara.sVoI.sPosition.dCor; % Coronal coordinate of voxel [mm]
-DicomHeader.PosSag         = dcmHeader.sSpecPara.sVoI.sPosition.dSag; % Sagittal coordinate of voxel [mm]
-DicomHeader.PosTra         = dcmHeader.sSpecPara.sVoI.sPosition.dTra; % Transversal coordinate of voxel [mm]
+if isfield(dcmHeader.sSpecPara.sVoI, 'sPosition')
+    DicomHeader.PosCor         = dcmHeader.sSpecPara.sVoI.sPosition.dCor; % Coronal coordinate of voxel [mm]
+    DicomHeader.PosSag         = dcmHeader.sSpecPara.sVoI.sPosition.dSag; % Sagittal coordinate of voxel [mm]
+    DicomHeader.PosTra         = dcmHeader.sSpecPara.sVoI.sPosition.dTra; % Transversal coordinate of voxel [mm]
+end
 % delta frequency (center of slice selection)
 if isfield(dcmHeader.sSpecPara, 'dDeltaFrequency')
     DicomHeader.deltaFreq = dcmHeader.sSpecPara.dDeltaFrequency;

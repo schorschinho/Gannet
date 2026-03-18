@@ -43,10 +43,12 @@ function MRS_struct = CoRegStandAlone(metabfile, struc)
 %       2023-03-13: Update CSV filenames; prevent overwriting if CSV file
 %                   already exists in the output directory
 
-if nargin == 0
+if nargin ~= 2
     fprintf('\n');
-    error('MATLAB:minrhs', 'Not enough input arguments.');
+    error('MATLAB:minrhs', 'Incorrect number of input arguments. Expected exactly 2 arguments.');
 end
+
+assert(iscell(metabfile) && iscell(struc), 'Inputs must be entered as cell arrays.');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   1. Pre-initialise
@@ -57,30 +59,35 @@ fileID = fopen(loadFile, 'rt');
 str = fread(fileID, Inf, '*uchar');
 fclose(fileID);
 str = char(str(:)');
-expression = '(?<field>MRS_struct.version.Gannet = )''(?<version>.*?)''';
+expression = '(?<field>MRS_struct.info.version.Gannet = )''(?<version>.*?)''';
 out = regexp(str, expression, 'names');
-MRS_struct.version.Gannet = out.version;
+MRS_struct.info.version.Gannet = out.version;
 
-expression = '(?<field>MRS_struct.version.load   = )''(?<version>.*?)''';
+expression = '(?<field>MRS_struct.info.version.load = )''(?<version>.*?)''';
 out = regexp(str, expression, 'names');
-MRS_struct.version.load = out.version;
+MRS_struct.info.version.load = out.version;
 
-MRS_struct.version.coregstandalone = '230729';
+MRS_struct.info.version.coregstandalone = '260109';
 
 MRS_struct.ii = 0;
 if size(metabfile,2) == 1
     metabfile = metabfile';
 end
 MRS_struct.metabfile  = metabfile;
-MRS_struct.p.HERMES   = 0;
 MRS_struct.p.numScans = length(metabfile);
+MRS_struct.p.bids     = 0;
 
-% Flags
-MRS_struct.p.mat    = 0; % Save results in *.mat file? (0 = NO, 1 = YES (default))
-MRS_struct.p.csv    = 1; % Save results in *.csv file? (0 = NO, 1 = YES (default))
-MRS_struct.p.vox    = {'vox1'}; % Name of the voxel
-MRS_struct.p.target = {'GABAGlx'}; % Name of the target metabolite
-MRS_struct.p.hide   = 0; % Do not display output figures
+% Pre-initialize settings
+MRS_struct.p.target    = {'GABAGlx'};
+MRS_struct.p.seqorig   = 'JHU';
+MRS_struct.p.vox       = {'vox1'};
+MRS_struct.p.HERMES    = 0;
+MRS_struct.p.PRIAM     = 0;
+MRS_struct.p.mat       = 0;
+MRS_struct.p.csv       = 1; % Save results in *.csv file? (0 = NO, 1 = YES)
+MRS_struct.p.normalize = 1; % Normalize voxel masks to MNI space and create a mean overlap voxel (as applicable) (0 = NO, 1 = YES)
+MRS_struct.p.append    = 0;
+MRS_struct.p.hide      = 0; % Do not display output figures
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   2. Determine data parameters from header
@@ -130,21 +137,21 @@ for ii = 1:length(metabfile) % Loop over all files in the batch (from metabfile)
 
 end
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%   4. Call coregister function
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%   4. Call co-register function
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 MRS_struct = CoReg(MRS_struct, struc);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   5. Call segment function
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 MRS_struct = Seg(MRS_struct);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %   6. Clean up, save data
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Save MRS_struct as mat file
 MRS_struct = rmfield(MRS_struct,'fids');
@@ -183,8 +190,7 @@ if MRS_struct.p.csv
     out.fWM  = MRS_struct.out.vox1.tissue.fWM(:);
     out.fCSF = MRS_struct.out.vox1.tissue.fCSF(:);
 
-    round2 = @(x) round(x*1e3)/1e3;
-    T = table(out.filename, round2(out.fGM), round2(out.fWM), round2(out.fCSF), ...
+    T = table(out.filename, round(out.fGM,3), round(out.fWM,3), round(out.fCSF,3), ...
         'VariableNames', {'Filename', 'fGM', 'fWM', 'fCSF'});
     writetable(T, csv_name);
 end

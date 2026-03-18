@@ -115,6 +115,10 @@ function print2eps(name, fig, export_options, varargin)
 % 16/03/22: Fixed occasional empty files due to excessive cropping (issues #350, #351)
 % 15/05/22: Fixed EPS bounding box (issue #356)
 % 13/04/23: Reduced (hopefully fixed) unintended EPS/PDF image cropping (issues #97, #318)
+% 02/05/24: Fixed contour labels with non-default FontName incorrectly exported as Courier (issue #388)
+% 11/05/25: Override Matlab's default Title & Creator meta-data (issue #402)
+% 12/09/25: Fixed error in case of escaped tex/latex chars in Title (issue #407)
+% 16/10/25: Fixed error in case of latex-format axes title (issue #409)
 %}
 
     options = {'-loose'};
@@ -526,7 +530,6 @@ function print2eps(name, fig, export_options, varargin)
         % 1b. Fix issue #239: black title meshes with temporary black background figure bgcolor, causing bad cropping
         hTitles = [];
         if isequal(get(fig,'Color'),'none')
-            hAxes = findall(fig,'type','axes');
             for idx = 1 : numel(hAxes)
                 hAx = hAxes(idx);
                 try
@@ -588,8 +591,42 @@ function print2eps(name, fig, export_options, varargin)
     fstrm = regexprep(fstrm, '\n([-\d.]+ [-\d.]+) ([-\d.]+ [-\d.]+) ([-\d.]+ [-\d.]+) 3 MP\nPP\n\3 \1 \2 3 MP\nPP\n','\n$1 $2 $3 0 0 4 MP\nPP\n');
     fstrm = regexprep(fstrm, '\n([-\d.]+ [-\d.]+) ([-\d.]+ [-\d.]+) ([-\d.]+ [-\d.]+) 3 MP\nPP\n\3 \2 \1 3 MP\nPP\n','\n$1 $2 $3 0 0 4 MP\nPP\n');
 
+    % Fix issue #402: override Matlab's default Title & Creator meta-data
+    idx = strfind(export_options.gs_options,'/Title ');
+    override_meta = ~isempty(idx) && (~iscell(idx) || ~isempty(idx{1}));
+    if override_meta
+        % Remove this meta property from the EPS so Ghostscript will override it
+        fstrm = regexprep(fstrm, '%%Title:[^\n]*\n', '');
+    else
+        % Replace Matlab-created default meta property value with a usable one
+        %%Title: C:/Users/Yair/AppData/Local/Temp/tp28b8a11e_42a7_40d4_b254_65d0af3c436f.eps
+        title_str = get(fig,'Name');
+        if isempty(title_str) && ~isempty(hAxes)
+            try title_str = hAxes(1).Title.String; catch, end
+            title_str = strrep(title_str,'\','\\'); %issue #407
+            title_str = strrep(title_str,'$','\$'); %issue #409
+        end
+        fstrm = regexprep(fstrm, '(%%Title:)[^\n]*\n', ['$1 ' title_str '\n']);
+    end
+
+    idx = strfind(export_options.gs_options,'/Creator ');
+    override_meta = ~isempty(idx) && (~iscell(idx) || ~isempty(idx{1}));
+    if override_meta
+        % Remove this meta property from the EPS so Ghostscript will override it
+        fstrm = regexprep(fstrm, '%%Creator:[^\n]*\n', '');
+    else
+        % Replace Matlab-created default meta property value with a usable one
+        %%Creator: (MATLAB, The Mathworks, Inc. Version 9.13.0.2049777 \(R2022b\). Operating System: Windows 10)
+        try
+            ver_str = ['export_fig v' num2str(export_fig('-version')) ' via '];
+            fstrm = regexprep(fstrm, '(%%Creator: *\(?)', ['$1' ver_str]);
+        catch
+        end
+    end
+
     % If user requested a regexprep replacement of string(s), do this now (issue #324)
     if isstruct(export_options) && isfield(export_options,'regexprep') && ~isempty(export_options.regexprep)  %issue #338
+        useRegexprepOption = true;
         try
             oldStrOrRegexp = export_options.regexprep{1};
             newStrOrRegexp = export_options.regexprep{2};
@@ -597,6 +634,30 @@ function print2eps(name, fig, export_options, varargin)
         catch err
             warning('YMA:export_fig:regexprep', 'Error parsing regexprep: %s', err.message);
         end
+    else
+        useRegexprepOption = false;
+    end
+
+    % Fix issue #388: contour labels with non-default FontName incorrectly exported as Courier
+    try
+        fontNames = {};
+        for idx = 1 : numel(hAxes)
+            try hPlots = allchild(hAxes(idx)); catch, hPlots = []; end
+            for idx2 = 1 : numel(hPlots)
+                try hLabels = hPlots(idx2).TextPrims; catch, hLabels = []; end
+                for idx3 = 1 : numel(hLabels)
+                    try fontNames{end+1} = hLabels(idx3).Font.Name; catch, end %#ok<AGROW>
+                end
+            end
+        end
+        fontNames = setdiff(fontNames,'Helvetica'); %Helvetica actually works ok
+        if numel(fontNames) > 1 && ~useRegexprepOption
+            warning('YMA:export_fig:countourFonts', 'export_fig cannot fix multiple contour label fonts; try using the -regexprep option to convert /Courier into %s etc.',fontNames{1});
+        elseif numel(fontNames) == 1
+            fstrm = regexprep(fstrm, '\n/Courier (\d+ F\nGS\n)', ['\n/' fontNames{1} ' $1']);
+        end
+    catch
+        % never mind - probably no matching contour labels
     end
 
     % Write out the fixed eps file
@@ -649,7 +710,7 @@ function [StoredColors, fstrm, foundFlags] = eps_maintainAlpha(fig, fstrm, Store
                 %Find and replace the RGBA values within the EPS text fstrm
                 %Note: .setopacityalpha is an unsupported PS extension that croaks in some GS versions (issue #285, https://bugzilla.redhat.com/show_bug.cgi?id=1632030)
                 %      (such cases are caught in eps2pdf.m and corrected by adding the -dNOSAFER Ghosscript option or by removing the .setopacityalpha line)
-                if strcmpi(propName,'Face')
+                if strcmpi(propName,'Face') %#ok<IFBDUP>
                     oldStr = sprintf(['\n' colorID ' RC\n']);  % ...N\n (removed to fix issue #225)
                     newStr = sprintf(['\n' origRGB ' RC\n' origAlpha ' .setopacityalpha true\n']);  % ...N\n
                 else  %'Edge'
