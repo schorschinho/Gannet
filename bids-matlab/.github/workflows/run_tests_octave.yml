@@ -25,12 +25,6 @@ env:
 jobs:
   test:
 
-    if: |
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && !contains(fromJSON('["github-actions[bot]","dependabot[bot]","pre-commit-ci[bot]"]'), github.event.pull_request.user.login)) ||
-      (github.event_name == 'pull_request_target' && contains(fromJSON('["github-actions[bot]","dependabot[bot]","pre-commit-ci[bot]"]'), github.event.pull_request.user.login))
-
     strategy:
       fail-fast: false
       matrix:
@@ -41,7 +35,7 @@ jobs:
     steps:
 
     - name: Clone bids-matlab
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         submodules: true
@@ -60,7 +54,7 @@ jobs:
       run: deno install -Agf -n bids-validator jsr:@bids/validator
 
     - name: Setup python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.13'
 
