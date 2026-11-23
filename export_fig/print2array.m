@@ -1,4 +1,4 @@
-function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options)
+function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options, silent)
 %PRINT2ARRAY  Exports a figure to a bitmap RGB image array
 %
 % Examples:
@@ -7,6 +7,7 @@ function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options)
 %   A = print2array(figure_handle, resolution)
 %   A = print2array(figure_handle, resolution, renderer)
 %   A = print2array(figure_handle, resolution, renderer, gs_options)
+%   A = print2array(figure_handle, resolution, renderer, gs_options, silent)
 %   [A, bcol, alpha] = print2array(...)
 %
 % This function outputs a bitmap image of a figure, at the desired resolution.
@@ -15,17 +16,18 @@ function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options)
 % If the Java screen-capture fails or if resolution~=1, the builtin print()
 % function is used to create a temp TIF file, which is then loaded and reported.
 % If this fails, print() is used to create a temp EPS file which is converted to
-% a TIF file using Ghostcript (http://www.ghostscript.com), loaded and reported.
+% a TIF file using Ghostscript (http://www.ghostscript.com), loaded and reported.
 %
 % Inputs:
-%   figure_handle - The handle of the figure to be exported. Default: gcf.
-%   resolution - Output resolution as a factor of screen resolution. Default: 1
+%   figure_handle - The handle of the figure to be exported. Default=gcf.
+%   resolution - Output resolution as a factor of screen resolution. Default=1
 %                Note: resolution ~= 1 uses a slow print to/from image file
-%   renderer   - The renderer to be used by print() function. Default: '-opengl'
+%   renderer   - The renderer to be used by print() function. Default='-opengl'
 %                Note: only used when resolution ~= 1
 %   gs_options - optional ghostscript parameters (e.g.: '-dNoOutputFonts').
 %                Enclose multiple options in a cell array, e.g. {'-a','-b'}
 %                Note: only used when resolution ~= 1 and basic print() fails
+%   silent     - optional parameter to suppress runtime warnings (default=false)
 %
 % Outputs:
 %   A     - MxNx3 uint8 bitmap image of the figure (MxN pixels x 3 RGB values)
@@ -66,11 +68,14 @@ function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options)
 % 19/12/21: Speedups; fixed exporting non-current figure (hopefully fixes issue #318)
 % 22/12/21: Avoid memory leak during screen-capture
 % 30/03/23: Added another short pause to avoid unintended image cropping (issue #318) 
+% 01/06/26: Suppressed InvertHardcopy warning when exporting uifigures
+% 02/06/26: Added optional silent parameter to suppress warnings (default=false)
 %}
 
     % Generate default input arguments, if needed
     if nargin < 1,  fig = gcf;  end
     if nargin < 2,  res = 1;    end
+    silent = nargin > 4 && silent;
 
     % Force a repaint to ensure we get an accurate snapshot image (issue #211)
     drawnow
@@ -93,10 +98,10 @@ function [A, bcol, alpha] = print2array(fig, res, renderer, gs_options)
         else
             error('magnify/downscale via print() to image file and then import');
         end
-    catch err  %#ok<NASGU>
+    catch err %#ok<NASGU>
         % Warn if output is large
         npx = prod(px(3:4)*res)/1e6;
-        if npx > 30
+        if npx > 30 && ~silent
             % 30M pixels or larger!
             warning('MATLAB:LargeImage', 'print2array generating a %.1fM pixel image. This could be slow and might also cause memory problems.', npx);
         end
@@ -330,6 +335,7 @@ function [imgData, alpha, err, ex] = getPrintImage(fig, res_str, renderer, tmp_n
     old_pos_mode    = get(fig, 'PaperPositionMode');
     old_orientation = get(fig, 'PaperOrientation');
     set(fig, 'PaperPositionMode','auto', 'PaperOrientation','portrait');
+    oldWarn = warning('off','MATLAB:print:InvertHardcopyIgnoredDefaultColorUsed');
     try
         % Workaround for issue #69: patches with LineWidth==0.75 appear wide (internal bug in Matlab's print() function)
         fp = [];  % in case we get an error below
@@ -352,6 +358,7 @@ function [imgData, alpha, err, ex] = getPrintImage(fig, res_str, renderer, tmp_n
     catch ex
         err = true;
     end
+    warning(oldWarn);
     if ~isempty(fp)  % this check is not really needed, but makes the code cleaner
         set(fp, 'LineWidth',0.75);  % restore original figure appearance
     end
